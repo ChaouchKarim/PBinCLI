@@ -3,7 +3,7 @@ import os, sys, argparse
 
 import pbincli.actions
 from pbincli.api import PrivateBin
-from pbincli.utils import PBinCLIException, PBinCLIError, validate_url
+from pbincli.utils import PBinCLIException, validate_url
 
 CONFIG_PATHS = [os.path.join(".", "pbincli.conf", ),
        os.path.join(os.getenv("HOME") or "~", ".config", "pbincli", "pbincli.conf") ]
@@ -13,22 +13,19 @@ def read_config(filename):
     settings = {}
     with open(filename) as f:
         for l in f.readlines():
-            if len(l.strip()) == 0:
-                continue
-            try:
-                key, value = l.strip().split("=")
-                settings[key.strip()] = value.strip()
-            except ValueError:
-                PBinCLIError("Unable to parse config file, please check it for errors.")
+            key, value = l.strip().split("=")
+            settings[key.strip()] = value.strip()
 
     return settings
 
-def main():
+def privatebin(list):
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(title="actions", help="List of commands")
 
     # a send command
     send_parser = subparsers.add_parser("send", description="Send data to PrivateBin instance")
+    send_parser.add_argument("-lu", "--login_user", help="login user to server")
+    send_parser.add_argument("-lp", "--login_pwd", help="login password to server")
     send_parser.add_argument("-t", "--text", help="text in quotes. Ignored if used stdin. If not used, forcefully used stdin")
     send_parser.add_argument("-f", "--file", help="example: image.jpg or full path to file")
     send_parser.add_argument("-p", "--password", help="password for encrypting paste")
@@ -56,8 +53,7 @@ def main():
     send_parser.add_argument("--no-insecure-warning", default=False, action="store_true",
         help="suppress InsecureRequestWarning (only with --no-check-certificate)")
     ##
-    send_parser.add_argument("-v", "--verbose", default=False, action="store_true", help="enable verbose output")
-    send_parser.add_argument("-d", "--debug", default=False, action="store_true", help="enable debug output")
+    send_parser.add_argument("-d", "--debug", default=False, action="store_true", help="enable debug")
     send_parser.add_argument("--dry", default=False, action="store_true", help="invoke dry run")
     send_parser.add_argument("stdin", help="input paste text from stdin", nargs="?", type=argparse.FileType("r"), default=sys.stdin)
     send_parser.set_defaults(func=pbincli.actions.send)
@@ -73,8 +69,7 @@ def main():
     get_parser.add_argument("--no-insecure-warning", default=False, action="store_true",
         help="suppress InsecureRequestWarning (only with --no-check-certificate)")
     ##
-    get_parser.add_argument("-v", "--verbose", default=False, action="store_true", help="enable verbose output")
-    get_parser.add_argument("-d", "--debug", default=False, action="store_true", help="enable debug output")
+    get_parser.add_argument("-d", "--debug", default=False, action="store_true", help="enable debug")
     get_parser.set_defaults(func=pbincli.actions.get)
 
     # a delete command
@@ -88,15 +83,14 @@ def main():
     delete_parser.add_argument("--no-insecure-warning", default=False, action="store_true",
         help="suppress InsecureRequestWarning (only with --no-check-certificate)")
     ##
-    delete_parser.add_argument("-v", "--verbose", default=False, action="store_true", help="enable verbose output")
-    delete_parser.add_argument("-d", "--debug", default=False, action="store_true", help="enable debug output")
+    delete_parser.add_argument("-d", "--debug", default=False, action="store_true", help="enable debug")
     delete_parser.set_defaults(func=pbincli.actions.delete)
 
     # parse arguments
-    args = parser.parse_args()
+    args = parser.parse_args(list)
 
     CONFIG = {
-        'server': 'https://paste.i2pd.xyz/',
+        'server': 'https://privatebin.lcsb.uni.lu/',
         'proxy': None,
         'short_api': None,
         'short_url': None,
@@ -133,12 +127,8 @@ def main():
 
     if hasattr(args, "func"):
         try:
-            args.func(args, api_client, settings=CONFIG)
+            return args.func(args, api_client, settings=CONFIG)
         except PBinCLIException as pe:
             raise PBinCLIException("error: {}".format(pe))
     else:
         parser.print_help()
-
-
-if __name__ == "__main__":
-    main()

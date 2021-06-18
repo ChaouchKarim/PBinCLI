@@ -1,13 +1,5 @@
 from pbincli.format import Paste
 from pbincli.utils import PBinCLIError
-import signal
-
-def signal_handler(sig, frame):
-    print('Keyboard interrupt received, terminating…')
-    exit(0)
-
-signal.signal(signal.SIGINT, signal_handler)
-
 
 def send(args, api_client, settings=None):
     from pbincli.api import Shortener
@@ -18,24 +10,18 @@ def send(args, api_client, settings=None):
         if args.text:
             text = args.text
         elif args.stdin:
-            print("Reading text from stdin…")
             text = args.stdin.read()
     elif not args.file:
         PBinCLIError("Nothing to send!")
     else:
         text = ""
 
-    print("Preparing paste…")
     paste = Paste(args.debug)
 
-    if args.verbose: print("Used server: {}".format(api_client.getServer()))
-
     # get from server supported paste format version and update object
-    if args.verbose: print("Getting supported paste format version from server…")
     version = api_client.getVersion()
     paste.setVersion(version)
 
-    if args.verbose: print("Filling paste with data…")
     # set compression type, works only on v2 pastes
     if version == 2:
         paste.setCompression(args.compression)
@@ -51,7 +37,6 @@ def send(args, api_client, settings=None):
     if args.file:
         paste.setAttachment(args.file)
 
-    if args.verbose: print("Encrypting paste…")
     paste.encrypt(
         formatter = args.format,
         burnafterreading = args.burn,
@@ -60,20 +45,24 @@ def send(args, api_client, settings=None):
 
     request = paste.getJSON()
 
-    if args.debug: print("Passphrase:\t{}\nRequest:\t{}".format(paste.getHash(), request))
+    if args.debug:
+        print("Passphrase:\t{}".format(paste.getHash()))
+        print("Request:\t{}".format(request))
 
     # If we use dry option, exit now
     if args.dry: exit(0)
 
-    print("Uploading paste…")
-    result = api_client.post(request)
-
+    if args.login_user or args.login_pwd:
+        result = api_client.post(request,args.login_user,args.login_pwd)
+    else:
+        result = api_client.post(request)
     if args.debug: print("Response:\t{}\n".format(result))
 
     # Paste was sent. Checking for returned status code
     if not result['status']: # return code is zero
         passphrase = paste.getHash()
-
+        return f"{settings['server']}?{result['id']}#{passphrase}"
+        """
         print("Paste uploaded!\nPasteID:\t{}\nPassword:\t{}\nDelete token:\t{}\n\nLink:\t\t{}?{}#{}".format(
             result['id'],
             passphrase,
@@ -81,13 +70,14 @@ def send(args, api_client, settings=None):
             settings['server'],
             result['id'],
             passphrase))
+        """
     elif result['status']: # return code is other then zero
-        PBinCLIError("Something went wrong…\nError:\t\t{}".format(result['message']))
+        PBinCLIError("Something went wrong...\nError:\t\t{}".format(result['message']))
     else: # or here no status field in response or it is empty
-        PBinCLIError("Something went wrong…\nError: Empty response.")
+        PBinCLIError("Something went wrong...\nError: Empty response.")
 
     if args.short:
-        print("\nQuerying URL shortening service…")
+        print("\nQuerying URL shortening service...")
         shortener.getlink("{}?{}#{}".format(
             settings['server'],
             result['id'],
@@ -105,7 +95,6 @@ def get(args, api_client, settings=None):
     if not (pasteid and passphrase):
         PBinCLIError("Incorrect request")
 
-    if args.verbose: print("Used server: {}".format(api_client.getServer()))
     if args.debug: print("PasteID:\t{}\nPassphrase:\t{}".format(pasteid, passphrase))
 
     paste = Paste(args.debug)
@@ -114,14 +103,13 @@ def get(args, api_client, settings=None):
         paste.setPassword(args.password)
         if args.debug: print("Password:\t{}".format(args.password))
 
-    if args.verbose: print("Requesting paste from server…")
     result = api_client.get(pasteid)
 
     if args.debug: print("Response:\t{}\n".format(result))
 
     # Paste was received. Checking received status code
     if not result['status']: # return code is zero
-        print("Paste received! Decoding…")
+        print("Paste received!")
 
         version = result['v'] if 'v' in result else 1
         paste.setVersion(version)
@@ -158,13 +146,13 @@ def get(args, api_client, settings=None):
                 f.close()
 
         if version == 1 and 'meta' in result and 'burnafterreading' in result['meta'] and result['meta']['burnafterreading']:
-            print("Burn afrer reading flag found. Deleting paste…")
+            print("Burn afrer reading flag found. Deleting paste...")
             api_client.delete(json_encode({'pasteid':pasteid,'deletetoken':'burnafterreading'}))
 
     elif result['status']: # return code is other then zero
-        PBinCLIError("Something went wrong…\nError:\t\t{}".format(result['message']))
+        PBinCLIError("Something went wrong...\nError:\t\t{}".format(result['message']))
     else: # or here no status field in response or it is empty
-        PBinCLIError("Something went wrong…\nError: Empty response.")
+        PBinCLIError("Something went wrong...\nError: Empty response.")
 
 
 def delete(args, api_client, settings=None):
@@ -173,8 +161,6 @@ def delete(args, api_client, settings=None):
     pasteid = args.paste
     token = args.token
 
-    if args.verbose: print("Used server: {}".format(api_client.getServer()))
     if args.debug: print("PasteID:\t{}\nToken:\t\t{}".format(pasteid, token))
 
-    print("Requesting paste deletion…")
     api_client.delete(json_encode({'pasteid':pasteid,'deletetoken':token}))

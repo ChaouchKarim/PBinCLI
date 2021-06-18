@@ -1,6 +1,7 @@
 import requests
 from requests import HTTPError
 from pbincli.utils import PBinCLIError
+from requests.auth import HTTPBasicAuth
 
 def _config_requests(settings=None):
     if settings['proxy']:
@@ -28,6 +29,19 @@ class PrivateBin:
     def post(self, request):
         result = self.session.post(
             url = self.server,
+            headers = self.headers,
+            proxies = self.proxy,
+            data = request)
+
+        try:
+            return result.json()
+        except ValueError:
+            PBinCLIError("Unable parse response as json. Received (size = {}):\n{}".format(len(result.text), result.text))
+
+    def post(self, request,user,password):
+        result = self.session.post(
+            url = self.server,
+            auth=HTTPBasicAuth(user,password),
             headers = self.headers,
             proxies = self.proxy,
             data = request)
@@ -77,10 +91,6 @@ class PrivateBin:
                 'v' in jsonldSchema['@context'] and
                 '@value' in jsonldSchema['@context']['v']) \
             else 1
-
-    def getServer(self):
-        return self.server
-
 
 class Shortener:
     """Some parts of this class was taken from
